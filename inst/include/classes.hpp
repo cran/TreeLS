@@ -2,9 +2,9 @@
 //
 //  Developers:
 //
-//  Tiago de Conto - ti@forlidar.com.br -  https://github.com/tiagodc/
+//  Tiago de Conto - tdc.florestal@gmail.com -  https://github.com/tiagodc/
 //
-//  COPYRIGHT: Tiago de Conto, 2019
+//  COPYRIGHT: Tiago de Conto, 2020
 //
 //  This piece of software is open and free to use, redistribution and modifications
 //  should be done in accordance to the GNU General Public License >= 3
@@ -25,12 +25,12 @@
 // [[Rcpp::depends(BH)]]
 
 #include <boost/functional/hash.hpp>
+#include <iostream>
 #include <math.h>
-#include <Rcpp.h>
 #include <vector>
-
-// #define USE_RCPP_ARMADILLO
-// #include "optim.hpp"
+#include <unordered_map>
+#include <unordered_set>
+#include <RcppArmadillo.h>
 
 using namespace std;
 
@@ -208,6 +208,196 @@ class HoughCenters{
       avg_y = ay / circles.size();
     }
 
+};
+
+class VoxelGrid{
+  public:
+    typedef unsigned long long int llint;
+
+    unordered_map<llint, unsigned int> counter;
+    unordered_map<llint, array<unsigned int,3> > voxels;
+    unordered_map<llint, array<unsigned int,2> > pixels;
+    double xoffset;
+    double yoffset;
+    double zoffset;
+    double spacing;
+
+    VoxelGrid(double xmin, double ymin, double zmin, double voxel_size){
+      setGrid(xmin, ymin, zmin, voxel_size);
+    }
+
+    void setGrid(double xmin, double ymin, double zmin, double voxel_size){
+      xoffset = xmin;
+      yoffset = ymin;
+      zoffset = zmin;
+      spacing = voxel_size;
+    }
+
+    llint voxelHasher(unsigned int nx, unsigned int ny, unsigned int nz){
+
+      llint tx = nx << 15;
+      llint ty = ny << 30;
+      llint tz = nz;
+
+      llint hash = tx + ty + tz;
+      return hash;
+    }
+
+    llint pixelHasher(unsigned int nx, unsigned int ny){
+      llint tx = nx << 20;
+      llint ty = ny;
+
+      llint hash = tx + ty;
+      return hash;
+    }
+
+    array<unsigned int,3> xyzOrder(double x, double y, double z){
+      unsigned int nx = floor( (x - xoffset) / spacing );
+      unsigned int ny = floor( (y - yoffset) / spacing );
+      unsigned int nz = floor( (z - zoffset) / spacing );
+
+      array<unsigned int,3> nxyz = {nx, ny, nz};
+      return nxyz;
+    }
+
+    void updateVoxelRegistry(double x, double y, double z){
+      array<unsigned int,3> vox = xyzOrder(x, y, z);
+      llint hash = voxelHasher(vox[0], vox[1], vox[2]);
+      counter[hash]++;
+      voxels[hash] = vox;
+    }
+
+    llint getVoxelHash(double x, double y, double z){
+      array<unsigned int,3> vox = xyzOrder(x, y, z);
+      llint hash = voxelHasher(vox[0], vox[1], vox[2]);
+      return hash;
+    }
+
+    void updatePixelRegistry(double x, double y, double z){
+      array<unsigned int,3> vox = xyzOrder(x, y, z);
+      llint hash = pixelHasher(vox[0], vox[1]);
+      counter[hash]++;
+      pixels[hash] = { vox[0], vox[1] };
+    }
+
+    llint getPixelHash(double x, double y, double z){
+      array<unsigned int,3> vox = xyzOrder(x, y, z);
+      llint hash = pixelHasher(vox[0], vox[1]);
+      return hash;
+    }
+
+    unsigned int getCount(double x, double y, double z, bool voxel=true){
+      array<unsigned int,3> vox = xyzOrder(x, y, z);
+      llint hash = voxel ? voxelHasher(vox[0], vox[1], vox[2]) : pixelHasher(vox[0], vox[1]);
+      return counter[hash];
+    }
+
+};
+
+class IndexedCloud{
+  public:
+    vector<vector<double> > cloud;
+    vector<unsigned int> uniqueIds;
+    vector<unsigned int> indexer;
+    unsigned int identifier;
+
+    // IndexedCloud(vector<vector<double> >& cld, vector<unsigned int>& idx){
+    //   fillCloud(cld, idx);
+    // }
+
+    // IndexedCloud(vector<vector<double> >& cld, vector<unsigned int>& idx, vector<unsigned int>& ids){
+    //   fillCloud(cld, idx, ids);
+    // }
+
+    // IndexedCloud(unsigned int& i, vector<vector<double> >& cld, vector<unsigned int>& idx, vector<unsigned int>& ids){
+    //   fillCloud(i, cld, idx, ids);
+    // }
+
+    void fillCloud(vector<vector<double> >& cld, vector<unsigned int>& idx){
+      cloud = cld;
+      indexer = idx;
+    }
+
+    void fillCloud(vector<vector<double> >& cld, vector<unsigned int>& idx, vector<unsigned int>& ids){
+      cloud = cld;
+      indexer = idx;
+      uniqueIds = ids;
+    }
+
+    void fillCloud(unsigned int& i, vector<vector<double> >& cld, vector<unsigned int>& idx, vector<unsigned int>& ids){
+      identifier = i;
+      cloud = cld;
+      indexer = idx;
+      uniqueIds = ids;
+    }
+
+};
+
+class IndexedCloudParts{
+  public:
+    unordered_map<unsigned int, IndexedCloud > parts;
+    set<unsigned int> segmentIds;
+
+    IndexedCloudParts(vector<vector<double> >& fullCloud, vector<unsigned int>& identifier, vector<unsigned int>& splitter, vector<unsigned int>& subSplitter){
+      setUniqueIndex(identifier);
+      populateParts(fullCloud, identifier, splitter);
+      fillSecondIndexer(subSplitter, splitter);
+    }
+
+    IndexedCloudParts(vector<vector<double> >& fullCloud, vector<unsigned int>& identifier, vector<unsigned int>& splitter){
+      setUniqueIndex(identifier);
+      populateParts(fullCloud, identifier, splitter);
+    }
+
+    IndexedCloudParts(vector<vector<double> >& fullCloud, vector<unsigned int>& identifier){
+      setUniqueIndex(identifier);
+      populateParts(fullCloud, identifier);
+    }
+
+    void setUniqueIndex(vector<unsigned int>& identifier){
+      segmentIds.insert(identifier.begin(), identifier.end());
+    }
+
+    void splitIds(vector<unsigned int>& identifier, vector<unsigned int>& splitter){
+      for(unsigned int i = 0; i < identifier.size(); ++i){
+        unsigned int sp = splitter[i];
+        parts[sp].uniqueIds.push_back( identifier[i] );
+      }
+    }
+
+    vector<double> ids2double(unsigned int key){
+      vector<unsigned int>& vals = parts[key].uniqueIds;
+      vector<double> convertVals(vals.begin(), vals.end());
+      return convertVals;
+    }
+
+    void populateParts(vector<vector<double> >& fullCloud, vector<unsigned int>& identifier, vector<unsigned int>& splitter){
+      populateParts(fullCloud, splitter);
+      splitIds(identifier, splitter);
+    }
+
+    void populateParts(vector<vector<double> >& fullCloud, vector<unsigned int>& identifier){
+
+      for(unsigned int i = 0; i < identifier.size(); ++i){
+        unsigned int id = identifier[i];
+
+        if(parts.find(id) == parts.end()){
+          vector<vector<double> > temp(fullCloud.size());
+          parts[id].cloud = temp;
+          parts[id].identifier = id;
+        }
+
+        for(unsigned int j = 0; j < fullCloud.size(); ++j){
+          parts[id].cloud[j].push_back( fullCloud[j][i] );
+        }
+      }
+    }
+
+    void fillSecondIndexer(vector<unsigned int>& sub_id, vector<unsigned int>& identifier){
+      for(unsigned int i = 0; i < identifier.size(); ++i){
+        parts[ identifier[i] ].indexer.push_back( sub_id[i] );
+      }
+    }
 };
 
 #endif // CLASSES_HPP

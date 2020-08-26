@@ -2,23 +2,23 @@
 % Please edit documentation in R/methods.R
 \name{setTLS}
 \alias{setTLS}
-\title{Reset or create a \code{LAS} object depending on the input's type}
+\title{(Re-)Create a \code{LAS} object depending on the input's type}
 \usage{
-setTLS(cloud, colNames = NULL)
+setTLS(cloud, col_names = NULL)
 }
 \arguments{
-\item{cloud}{\code{LAS}, \code{data.frame}, \code{matrix} or similar object to be converted or reset.}
+\item{cloud}{\code{LAS}, \code{data.frame}, \code{matrix} or similar object to be converted.}
 
-\item{colNames}{optional - \code{character} vector. Only used for table-like files. It states the column names - if not set, only the 3 first columns will be converted to XYZ.}
+\item{col_names}{optional - \code{character} vector. Only used for table-like objects. It states the column names. If not set, only the 3 first columns will be used and assigned to the XYZ fields.}
 }
 \value{
-\code{LAS} object.
+\code{\link[lidR:LAS]{LAS}} object.
 }
 \description{
-Reset the input's header if it is a \code{LAS} object, or generate a new \code{LAS} from a table-like input. For more information, checkout the \code{\link[lidR:LAS]{lidR::LAS}} description page.
+Reset the input's header if it is a \code{LAS} object, or generate a new \code{LAS} from a table-like input. For more information, checkout \code{\link[lidR:LAS]{lidR::LAS}}.
 }
 \examples{
-cld = matrix(runif(300, 0, 10), ncol=3)
-cld = setTLS(cld)
-summary(cld)
+cloud = matrix(runif(300, 0, 10), ncol=3)
+cloud = setTLS(cloud)
+summary(cloud)
 }

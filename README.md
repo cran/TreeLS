@@ -1,30 +1,44 @@
+[![GPLv3 License](https://img.shields.io/badge/License-GPL%20v3-yellow.svg)](https://opensource.org/licenses/)
+![CRAN checks](https://cranchecks.info/badges/summary/TreeLS)
+![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/tiagodc/TreeLS)
+![](https://cranlogs.r-pkg.org/badges/grand-total/TreeLS)
+
 # TreeLS
 
-High performance R functions for forest inventory based on **T**errestrial **L**aser **S**canning (but not only) point clouds.
+High performance R functions for forest data processing based on **T**errestrial **L**aser **S**canning (but not only) point clouds.
 
 ## Description
 
-This package is a refactor of the methods described in [this paper](https://doi.org/10.1016/j.compag.2017.10.019).
+This package is a refactor of the methods described in [this paper](https://doi.org/10.1016/j.compag.2017.10.019), among many other features for 3D point cloud processing of forest environments.
 
-The algorithms were rewritten in C++ and wrapped in R functions through `Rcpp`. The algorithms were reviewed and enhanced, new functionalities introduced and the rebuilt functions now work upon [`lidR`](https://github.com/Jean-Romain/lidR/)'s `LAS` objects infrastructure.
+Most algorithms are written in C++ and wrapped in R functions through `Rcpp`. *TreeLS* is built on top of [lidR](https://github.com/Jean-Romain/lidR/), using its `LAS` infrastructure internally for most methods.
 
-This is an ongoing project and new features will be introduced often. For any questions or comments please contact me through github. Suggestions, ideas and references of new algorithms are always welcome - as long as they fit into TreeLS' scope.
+For any questions, comments or bug reports please submit an [issue](https://github.com/tiagodc/TreeLS/issues) here on GitHub. Suggestions, ideas and references of new algorithms are always welcome - as long as they fit into TreeLS' scope.
 
-<img align="right" height="450" src="https://raw.githubusercontent.com/tiagodc/Scripts/master/animations/treedt.gif">
+`TreeLS` is currently on v2.0. To install it from an official mirror, use: `install.packages("TreeLS")`. To install the most recent version, check out the *Installation from source* section below.
+
+*TreeLS is not on CRAN at the moment (August/2020), the up-to-date version is submitted and should be available shortly. Meanwhile you can install it from source using devtools.
+
+## News
+
+- August/2020: Version 2.0 is finally available! It's a major release, introducing several new functionalities, bug fixes, more robust estimators for noisy clouds and more flexible plotting. All functionalities from older versions are now available and optimized, so there should be no need to use legacy code anymore. The scope of application of TreeLS has become much wider in this version, specially due to the introduction of functions like `fastPointMetrics` and `shapeFit`, making it much easier for researchers to assess point cloud data in many contexts and develop their own methods on top of those functions. For a comprehensive list of the updates check out the [CHANGELOG](https://github.com/tiagodc/TreeLS/blob/master/CHANGELOG.md).
+
+- March/2019: `TreeLS` is finally available on CRAN and is now an official R package.
+
+<img align="right" height="400" src="https://raw.githubusercontent.com/tiagodc/Scripts/master/animations/treedt.gif">
 
 ## Main functionalities
 
 - Tree detection at plot level
-- Stem points detection at single tree and plot levels
-- Stem segmentation at single tree and plot levels
+- Tree region assignment
+- Stem detection and denoising
+- Stem segmentation
+- Forest inventory
+- Fast calculation of point features
+- Research basis and other applications
+- 3D plotting and manipulation
 
-## Coming soon:
-- `lidR` wrappers for writing TLS data with extra header fields
-- Eigen decomposition feature detection for trees and stems
-- Tree modelling based on robust cylinder fitting
-- 3D interactive point cloud manipulation
-
-## Installation
+## Installation from source
 
 ### Requirements
 - `devtools`: run `install.packages('devtools', dependencies = TRUE)` from the R console
@@ -40,44 +54,73 @@ On the R console, run:
 devtools::install_github('tiagodc/TreeLS')
 ```
 
-#### Legacy code
-
-For anyone still interested in the old implementations of this library (fully developed in R, slow but suitable for research), you can still use it. In order to do it, uninstall any recent instances of `TreeLS` and reinstall the legacy version:
-```
-devtools::install_github('tiagodc/TreeLS', ref='old')
-```
-Not all features from the old package were reimplemented using `Rcpp`, but I'll get there.
-
 ## Usage
 
-Example of full processing pipe until stem segmentation for a forest plot:
+Example of full processing workflow from reading a point cloud file until stem segmentation of a forest plot:
 ```
 library(TreeLS)
 
-# open artificial sample file
+# open sample plot file
 file = system.file("extdata", "pine_plot.laz", package="TreeLS")
 tls = readTLS(file)
 
 # normalize the point cloud
-tls = tlsNormalize(tls, keepGround = T)
-plot(tls, color='Classification')
+tls = tlsNormalize(tls, keep_ground = F)
+x = plot(tls)
 
 # extract the tree map from a thinned point cloud
-thin = tlsSample(tls, voxelize(0.05))
-map = treeMap(thin, map.hough(min_density = 0.03))
+thin = tlsSample(tls, smp.voxelize(0.02))
+map = treeMap(thin, map.hough(min_density = 0.1), 0)
+add_treeMap(x, map, color='yellow', size=2)
 
-# visualize tree map in 2D and 3D
-xymap = treePositions(map, plot = TRUE)
-plot(map, color='Radii')
+# classify tree regions
+tls = treePoints(tls, map, trp.crop())
+add_treePoints(x, tls, size=4)
+add_treeIDs(x, tls, cex = 2, col='yellow')
 
 # classify stem points
-tls = stemPoints(tls, map)
+tls = stemPoints(tls, stm.hough())
+add_stemPoints(x, tls, color='red', size=8)
 
-# extract measures
-seg = stemSegmentation(tls, sgmt.ransac.circle(n = 15))
+# make the plot's inventory
+inv = tlsInventory(tls, d_method=shapeFit(shape='circle', algorithm = 'irls'))
+add_tlsInventory(x, inv)
 
-# view the results
-tlsPlot(tls, seg)
-tlsPlot(tls, seg, map)
+# extract stem measures
+seg = stemSegmentation(tls, sgt.ransac.circle(n = 20))
+add_stemSegments(x, seg, color='white', fast=T)
+
+# plot everything once
+tlsPlot(tls, map, inv, seg, fast=T)
+
+# check out only one tree
+tlsPlot(tls, inv, seg, tree_id = 11)
+
+#------------------------------------------#
+### overview of some new methods on v2.0 ###
+#------------------------------------------#
+
+file = system.file("extdata", "pine.laz", package="TreeLS")
+tls = readTLS(file) %>% tlsNormalize()
+
+# calculate some point metrics
+tls = fastPointMetrics(tls, ptm.knn())
+x = plot(tls, color='Verticality')
+
+# get its stem points
+tls = stemPoints(tls, stm.eigen.knn(voxel_spacing = .02))
+add_stemPoints(x, tls, size=3, color='red')
+
+# get dbh and height
+dbh_algo = shapeFit(shape='cylinder', algorithm = 'bf', n=15, inliers=.95, z_dev=10)
+inv = tlsInventory(tls, hp = .95, d_method = dbh_algo)
+add_tlsInventory(x, inv)
+
+# segment the stem usind 3D cylinders and getting their directions
+seg = stemSegmentation(tls, sgt.irls.cylinder(n=300))
+add_stemSegments(x, seg, color='blue')
+
+# check out a specific tree segment
+tlsPlot(seg, tls, segment = 3)
 
 ```

@@ -4,17 +4,24 @@
 \alias{map.hough}
 \title{Tree mapping algorithm: Hough Transform}
 \usage{
-map.hough(hmin = 1, hmax = 3, hstep = 0.5, pixel_size = 0.025,
-  max_radius = 0.25, min_density = 0.1, min_votes = 3)
+map.hough(
+  min_h = 1,
+  max_h = 3,
+  h_step = 0.5,
+  pixel_size = 0.025,
+  max_d = 0.5,
+  min_density = 0.1,
+  min_votes = 3
+)
 }
 \arguments{
-\item{hmin, hmax}{\code{numeric} - height thresholds within the point cloud in which circle search will be performed.}
+\item{min_h, max_h}{\code{numeric} - height thresholds applied to filter a point cloud before processing.}
 
-\item{hstep}{\code{numeric} - height interval to perform circle search.}
+\item{h_step}{\code{numeric} - height interval to perform point filtering/assignment/classification.}
 
 \item{pixel_size}{\code{numeric} - pixel side length to discretize the point cloud layers while performing the Hough Transform circle search.}
 
-\item{max_radius}{\code{numeric} - approximately the largest stem cross section radius expected in the point cloud.}
+\item{max_d}{\code{numeric} - largest tree diameter expected in the point cloud.}
 
 \item{min_density}{\code{numeric} - between 0 and 1 - minimum point density within a pixel evaluated on the Hough Transform - i.e. only \emph{dense} point clousters will undergo circle search.}
 
@@ -38,7 +45,7 @@ The variables describing each point in the output are:
 of its stem segment (\code{PointSourceID})
 \item \code{Radii}: approximate radius estimated by that point - always a multiple of the \code{pixel_size}
 \item \code{TreeID}: unique tree ID of the point
-\item \code{TreePosition}: if \code{TRUE}, the point represents its tree's approximate coordinate
+\item \code{TreePosition}: if \code{TRUE}, the point represents the tree's position coordinate
 }
 }
 
@@ -74,18 +81,18 @@ and exported in the output map.
 }
 
 \examples{
-file = system.file("extdata", "model_boles.laz", package="TreeLS")
-tls = readTLS(file)
-plot(tls)
+file = system.file("extdata", "pine_plot.laz", package="TreeLS")
+tls = readTLS(file) \%>\%
+  tlsNormalize \%>\%
+  tlsSample
 
-## build a 3D map of tree occurrences
-map = treeMap(tls)
-plot(map, color='Radii')
+x = plot(tls)
 
-## get a 2D representation of the tree map
-xymap = treePositions(map)
-head(xymap)
+map = treeMap(tls, map.hough(h_step = 1, max_h = 4))
+add_treeMap(x, map, color='red')
+
+xymap = treeMap.positions(map)
 }
 \references{
-Conto, T. ; Olofsson, K. ; Gorgens, E. B. ; Rodriguez, L. C. E. ; Almeida, G. Performance of stem denoising and stem modelling algorithms on single tree point clouds from terrestrial laser scanning. Computers and Electronics in Agriculture, v. 143, p. 165-176, 2017.
+Conto, T. et al., 2017. Performance of stem denoising and stem modelling algorithms on single tree point clouds from terrestrial laser scanning. Computers and Electronics in Agriculture, v. 143, p. 165-176.
 }

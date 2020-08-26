@@ -2,9 +2,9 @@
 //
 //  Developers:
 //
-//  Tiago de Conto - ti@forlidar.com.br -  https://github.com/tiagodc/
+//  Tiago de Conto - tdc.florestal@gmail.com -  https://github.com/tiagodc/
 //
-//  COPYRIGHT: Tiago de Conto, 2019
+//  COPYRIGHT: Tiago de Conto, 2020
 //
 //  This piece of software is open and free to use, redistribution and modifications
 //  should be done in accordance to the GNU General Public License >= 3
@@ -20,285 +20,7 @@
 //  ===============================================================================
 
 #include "methods.hpp"
-
-// convert r matrix to std::vector
-vector<vector<double> > rmatrix2cpp(NumericMatrix& cloud){
-
-  NumericMatrix::Column xcol = cloud( _, 0);
-  NumericMatrix::Column ycol = cloud( _, 1);
-  NumericMatrix::Column zcol = cloud( _, 2);
-
-  vector<vector<double> > xyz(3);
-
-  xyz[0].insert(xyz[0].begin(), xcol.begin(), xcol.end());
-  xyz[1].insert(xyz[1].begin(), ycol.begin(), ycol.end());
-  xyz[2].insert(xyz[2].begin(), zcol.begin(), zcol.end());
-
-  return xyz;
-}
-
-// get min values from XYZ point cloud
-vector<double> getMinMax(vector<vector<double> >& xyz){
-
-  vector<double> minmax(6);
-  minmax[0] = minmax[1] = xyz[0][0];
-  minmax[2] = minmax[3] = xyz[1][0];
-  minmax[4] = minmax[5] = xyz[2][0];
-
-  for(unsigned int i = 1; i < xyz[0].size(); ++i){
-
-    double x = xyz[0][i];
-    double y = xyz[1][i];
-    double z = xyz[2][i];
-
-    if(x < minmax[0]) minmax[0] = x; else if(x > minmax[1]) minmax[1] = x;
-    if(y < minmax[2]) minmax[2] = y; else if(y > minmax[3]) minmax[3] = y;
-    if(z < minmax[4]) minmax[4] = z; else if(z > minmax[5]) minmax[5] = z;
-  }
-
-  return minmax;
-
-}
-
-// crop point cloud
-vector<vector<double> > cropCloud(vector<vector<double> > cloud, double xCenter, double yCenter, double len, bool circle, bool negative){
-
-  vector<vector<double> > keepCloud(3);
-
-  for(unsigned int i = 0; i < cloud[0].size(); ++i){
-
-    double& x = cloud[0][i];
-    double& y = cloud[1][i];
-    double& z = cloud[2][i];
-
-    bool keep;
-    if(circle){
-      double dist = sqrt( pow(x - xCenter, 2) + pow(y - yCenter, 2) );
-      keep = dist < len;
-    }else{
-      double dx = abs(x - xCenter);
-      double dy = abs(y - yCenter);
-      keep = dx < (len/2) && dy < (len/2);
-    }
-
-    if(negative) keep = !keep;
-
-    if(keep){
-      keepCloud[0].push_back(x);
-      keepCloud[1].push_back(y);
-      keepCloud[2].push_back(z);
-    }
-
-  }
-
-  return keepCloud;
-
-}
-
-vector<bool> cropCloudFilter(vector<vector<double> > cloud, double xCenter, double yCenter, double len, bool circle, bool negative){
-
-  vector<bool> keepCloud( cloud[0].size() );
-
-  for(unsigned int i = 0; i < cloud[0].size(); ++i){
-
-    double& x = cloud[0][i];
-    double& y = cloud[1][i];
-
-    bool keep;
-    if(circle){
-      double dist = sqrt( pow(x - xCenter, 2) + pow(y - yCenter, 2) );
-      keep = dist < len;
-    }else{
-      double dx = abs(x - xCenter);
-      double dy = abs(y - yCenter);
-      keep = dx < (len/2) && dy < (len/2);
-    }
-
-   keepCloud[i] = negative ? !keep : keep;
-
-  }
-
-  cloud.clear();
-  cloud.shrink_to_fit();
-
-  return keepCloud;
-
-}
-
-// systematic voxel grid point filter (-thin_with_voxel)
-vector<bool> voxelFilter(vector<vector<double> >& cloud, double voxel_spacing){
-
-  double& xoffset = cloud[0][0];
-  double& yoffset = cloud[1][0];
-  double& zoffset = cloud[2][0];
-
-  VoxelSet ledger;
-  vector<bool> filter(cloud[0].size());
-
-  for(unsigned int i = 0; i < cloud[0].size(); ++i){
-
-   int nx = floor( (cloud[0][i] - xoffset) / voxel_spacing);
-   int ny = floor( (cloud[1][i] - yoffset) / voxel_spacing);
-   int nz = floor( (cloud[2][i] - zoffset) / voxel_spacing);
-
-   array<int,3> voxel = {nx, ny, nz};
-   filter[i] = ledger.insert(voxel).second;
-  }
-
-  cloud.clear();
-  cloud.shrink_to_fit();
-
-  return filter;
-
-}
-
-// split point cloud into horizontal slices
-vector<vector<vector<double> > > getSlices(NumericMatrix& cloud, double zmin, double zmax, double zstep){
-
-  NumericMatrix::Column xcol = cloud( _, 0);
-  NumericMatrix::Column ycol = cloud( _, 1);
-  NumericMatrix::Column zcol = cloud( _, 2);
-
-  unsigned int nlayers = ceil((zmax - zmin) / zstep);
-  vector<vector<vector<double> > > store(nlayers, vector<vector<double> >(3));
-
-  for(int i = 0; i < cloud.nrow(); ++i){
-
-    double z = zcol[i];
-    if(z < zmin || z >= zmax)
-      continue;
-
-    unsigned int n = floor((z - zmin) / zstep);
-
-    store[n][0].push_back(xcol[i]);
-    store[n][1].push_back(ycol[i]);
-    store[n][2].push_back(zcol[i]);
-  }
-
-  return store;
-
-}
-
-vector<vector<vector<double> > > getSlices(vector<vector<double> >& cloud, double zmin, double zmax, double zstep){
-
-  vector<double>& xcol = cloud[0];
-  vector<double>& ycol = cloud[1];
-  vector<double>& zcol = cloud[2];
-
-  unsigned int nlayers = ceil((zmax - zmin) / zstep);
-  vector<vector<vector<double> > > store(nlayers, vector<vector<double> >(3));
-
-  for(unsigned int i = 0; i < xcol.size(); ++i){
-
-    double z = zcol[i];
-    if(z < zmin || z >= zmax)
-      continue;
-
-    unsigned int n = floor((z - zmin) / zstep);
-
-    store[n][0].push_back(xcol[i]);
-    store[n][1].push_back(ycol[i]);
-    store[n][2].push_back(zcol[i]);
-  }
-
-  return store;
-
-}
-
-// split point cloud according to some criterion
-vector<vector<vector<double> > > getChunks(vector<vector<double> >& cloud, vector<unsigned int>& identifier){
-
-  vector<double>& xcol = cloud[0];
-  vector<double>& ycol = cloud[1];
-  vector<double>& zcol = cloud[2];
-
-  unsigned int minIndex = *min_element(identifier.begin(), identifier.end());
-  unsigned int maxIndex = *max_element(identifier.begin(), identifier.end());
-  unsigned int nlayers =  maxIndex - minIndex + 1;
-
-  vector<vector<vector<double> > > store(nlayers, vector<vector<double> >(3));
-
-  for(unsigned int i = 0; i < xcol.size(); ++i){
-
-    unsigned int n = identifier[i] - minIndex;
-
-    store[n][0].push_back(xcol[i]);
-    store[n][1].push_back(ycol[i]);
-    store[n][2].push_back(zcol[i]);
-  }
-
-  return store;
-
-}
-
-vector<vector<unsigned int> > partitionIndex(vector<unsigned int>& identifier, vector<unsigned int>& partitioner){
-
-  unsigned int minIndex = *min_element(identifier.begin(), identifier.end());
-  unsigned int maxIndex = *max_element(identifier.begin(), identifier.end());
-  unsigned int nlayers =  maxIndex - minIndex + 1;
-
-  vector< vector<unsigned int> > store(nlayers);
-
-  for(unsigned int i = 0; i < identifier.size(); ++i){
-    unsigned int n = identifier[i] - minIndex;
-    store[n].push_back(partitioner[i]);
-  }
-
-  return store;
-
-}
-
-vector<vector<double> > partitionIndex(vector<unsigned int>& identifier, vector<double>& partitioner){
-
-  unsigned int minIndex = *min_element(identifier.begin(), identifier.end());
-  unsigned int maxIndex = *max_element(identifier.begin(), identifier.end());
-  unsigned int nlayers =  maxIndex - minIndex + 1;
-
-  vector< vector<double> > store(nlayers);
-
-  for(unsigned int i = 0; i < identifier.size(); ++i){
-    unsigned int n = identifier[i] - minIndex;
-    store[n].push_back(partitioner[i]);
-  }
-
-  return store;
-
-}
-
-// get unique values according to an indexer
-vector<unsigned int> idSortUnique(vector<unsigned int>& identifier, vector<unsigned int>& values){
-
-  unsigned int minIndex = *min_element(identifier.begin(), identifier.end());
-  unsigned int maxIndex = *max_element(identifier.begin(), identifier.end());
-  unsigned int nlayers =  maxIndex - minIndex + 1;
-
-  vector<unsigned int> store(nlayers);
-
-  for(unsigned int i = 0; i < identifier.size(); ++i){
-    unsigned int n = identifier[i] - minIndex;
-    store[n] = values[i];
-  }
-
-  return store;
-
-}
-
-vector<double> idSortUnique(vector<unsigned int>& identifier, vector<double>& values){
-
-  unsigned int minIndex = *min_element(identifier.begin(), identifier.end());
-  unsigned int maxIndex = *max_element(identifier.begin(), identifier.end());
-  unsigned int nlayers =  maxIndex - minIndex + 1;
-
-  vector<double> store(nlayers);
-
-  for(unsigned int i = 0; i < identifier.size(); ++i){
-    unsigned int n = identifier[i] - minIndex;
-    store[n] = values[i];
-  }
-
-  return store;
-
-}
+#include <algorithm>
 
 // convert point cloud slice to raster of point count
 Raster getCounts(vector<vector<double> >& slice, double pixel_size){
@@ -579,6 +301,12 @@ vector<HoughCenters> treeHough(vector<vector<double> >& cppCloud, double h1, dou
 
   vector<double> bbox = getMinMax(cppCloud);
   vector<vector<double> > cloudSegment = getSlices(cppCloud, h1, h2, h2-h1)[0];
+
+  if(cloudSegment[0].empty()){
+    vector<HoughCenters> noPoints;
+    return noPoints;
+  }
+
   Raster raster = getCounts(cloudSegment, pixel);
 
   HoughCircle circle = getSingleCenter(&raster, radius, density, votes).main_circle;
@@ -646,75 +374,32 @@ vector<HoughCenters> treeHough(vector<vector<double> >& cppCloud, double h1, dou
 
 }
 
-// fit ransac circle
-vector<double> ransacCircle(vector<vector<double> >& cloud, unsigned int nSamples, double pConfidence, double pInliers){
+vector<vector<vector<double> > > treeEigenHough(vector<vector<double> >& cppEigenCloud, vector<unsigned int>& pointId, vector<unsigned int>& segId, double voxel_size, double max_rad, bool is2d, bool getSpace){
 
-  unsigned int kIterations = ceil(5 * log(1 - pConfidence) / log(1 - pow( pInliers, nSamples)));
-  vector< vector<double> > allCircles( 4, vector<double>(kIterations) );
-  unsigned int best = 0;
+  IndexedCloudParts treeCloud(cppEigenCloud, pointId, segId);
+  cppEigenCloud.clear();
+  cppEigenCloud.shrink_to_fit();
 
-  Eigen::Matrix<double, Eigen::Dynamic, 3> tempMatrix;
-  tempMatrix.resize(nSamples, 3);
+  vector<vector<vector<double> > > results;
 
-  Eigen::Matrix<double, Eigen::Dynamic, 1> rhsVector;
-  rhsVector.resize(nSamples, 3);
+  for(auto& seg : treeCloud.parts){
 
-  for(unsigned int k = 0; k < kIterations; ++k){
+    unsigned int id = seg.first;
+    vector<vector<double> > vals = voxelCounter(seg.second.cloud, voxel_size, max_rad, is2d, getSpace);
 
-    vector<unsigned int> random(nSamples);
-
-    for(unsigned int i = 0; i < random.size(); ++i){
-      unsigned int n;
-      bool exists;
-
-      do{
-        n = floor( R::runif(0, cloud[0].size()) );
-        exists = find(begin(random), end(random), n) != end(random);
-      }while(exists);
-
-      random[i] = n;
-
-      tempMatrix(i, 0) = cloud[0][n];
-      tempMatrix(i, 1) = cloud[1][n];
-      tempMatrix(i, 2) = 1;
-      rhsVector(i,0) = pow( tempMatrix(i,0), 2) + pow( tempMatrix(i,1), 2);
-    }
-
-    Eigen::Matrix<double, 3, 1> qrDecompose = tempMatrix.colPivHouseholderQr().solve(rhsVector);
-
-    Eigen::Matrix<double, 3, 1> xyr;
-    xyr(0,0) =  qrDecompose(0,0) / 2;
-    xyr(1,0) =  qrDecompose(1,0) / 2;
-    xyr(2,0) =  sqrt( ((pow( qrDecompose(0,0) ,2) + pow( qrDecompose(1,0) ,2)) / 4) + qrDecompose(2,0) );
-
-    double sumOfSquares = 0;
-    // for(unsigned int i = 0; i < cloud[0].size(); ++i){
-    for(auto& i : random){
-      double tempX = pow( cloud[0][i] - xyr(0,0) , 2);
-      double tempY = pow( cloud[1][i] - xyr(1,0) , 2);
-      sumOfSquares += pow( sqrt( tempX + tempY ) - xyr(2,0) , 2);
-    }
-
-    double circleError = sqrt(sumOfSquares / cloud[0].size());
-
-    allCircles[0][k] = xyr(0,0);
-    allCircles[1][k] = xyr(1,0);
-    allCircles[2][k] = xyr(2,0);
-    allCircles[3][k] = circleError;
-
-    if(allCircles[3][k] < allCircles[3][best])
-      best = k;
-
+    if(!getSpace){
+      vals.push_back( treeCloud.ids2double(id) );
+    };
+    
+    vals.push_back({ (double)id });
+    results.push_back(vals);
   }
 
-  vector<double> bestFit = { allCircles[0][best] , allCircles[1][best] , allCircles[2][best] , allCircles[3][best] };
-
-  return bestFit;
-
+  return results;
 }
 
-// fit ransac circles on stem cloud
-vector<vector<double> > ransacStemCircles(vector<vector<double> >& cloud, vector<unsigned int>& segments, vector<double>& radii, unsigned int nSamples, double pConfidence, double pInliers, double tolerance){
+// single stem methods
+vector<vector<double> > ransacStemCircle(vector<vector<double> >& cloud, vector<unsigned int>& segments, vector<double>& radii, unsigned int nSamples, double pConfidence, double pInliers, double tolerance){
 
   vector<vector<vector<double> > > stemSlices = getChunks(cloud, segments);
 
@@ -737,7 +422,7 @@ vector<vector<double> > ransacStemCircles(vector<vector<double> >& cloud, vector
     if(slice[0].size() <= nSamples) continue;
 
     double& hrad = segRadii[i];
-    vector<double> temp = ransacCircle(slice, nSamples, pConfidence, pInliers);
+    vector<double> temp = ransacCircle(slice, nSamples, pConfidence, pInliers, 20);
 
     double rdiff = abs(temp[2] - hrad);
     if(rdiff > tolerance){
@@ -759,7 +444,152 @@ vector<vector<double> > ransacStemCircles(vector<vector<double> >& cloud, vector
 
 }
 
-// fit ransac circles over many stems
+vector<vector<double> > ransacStemCylinder(vector<vector<double> >& cloud, vector<unsigned int>& segments, vector<double>& radii, unsigned int nSamples, double pConfidence, double pInliers, double tolerance){
+
+  vector<vector<vector<double> > > stemSlices = getChunks(cloud, segments);
+
+  cloud.clear();
+  cloud.shrink_to_fit();
+
+  vector<double> segRadii = idSortUnique(segments, radii);
+
+  set<unsigned int> uniqueIds;
+  for(auto& i : segments){
+    uniqueIds.insert(i);
+  }
+
+  vector< vector<double> > estimates;
+
+  for(unsigned int i = 0; i < stemSlices.size(); ++i){
+
+    vector<vector<double> > slice = stemSlices[i];
+
+    // cout << "... seg " << i+1 << " of " << stemSlices.size() << ", n points: " << slice[0].size() << endl;
+
+    if(slice[0].size() <= nSamples) continue;
+
+    double& hrad = segRadii[i];
+    vector<double> temp = ransacCylinder(slice, nSamples, pConfidence, pInliers);
+
+    double rdiff = abs(temp[4] - hrad);
+    if(rdiff > tolerance){
+      temp[0] = 0;
+      temp[1] = PI/2;
+      temp[2] = 0;
+      temp[3] = 0;
+      temp[4] = hrad;
+      temp[5] = 0;
+    }
+
+    unsigned int id = *next(uniqueIds.begin(), i);
+    temp.push_back(id);
+    estimates.push_back(temp);
+  }
+
+  return estimates;
+
+}
+
+vector<vector<double> > irlsStemCylinder(vector<vector<double> >& cloud, vector<unsigned int>& segments, vector<double>& radii, unsigned int nPoints,  double tolerance){
+
+  vector<vector<vector<double> > > stemSlices = getChunks(cloud, segments);
+
+  cloud.clear();
+  cloud.shrink_to_fit();
+
+  vector<double> segRadii = idSortUnique(segments, radii);
+
+  set<unsigned int> uniqueIds;
+  for(auto& i : segments){
+    uniqueIds.insert(i);
+  }
+
+  vector< vector<double> > estimates;
+  vector<double> initPars = {0, PI/2, 0, 0, 0};
+
+  for(unsigned int i = 0; i < stemSlices.size(); ++i){
+
+    vector<vector<double> > slice = stemSlices[i];
+
+    // cout << "... seg " << i+1 << " of " << stemSlices.size() << ", n points: " << slice[0].size() << endl;
+
+    if(slice[0].size() <= 5) continue;
+
+    if(slice[0].size() > nPoints && nPoints > 0){
+      double p = (double)nPoints / (double)slice[0].size();
+      slice = randomPoints(slice, p);
+    }
+
+    double& hrad = segRadii[i];
+    vector<double> temp = irlsCylinder(slice, initPars);
+
+    double rdiff = abs(temp[4] - hrad);
+    if(rdiff > tolerance){
+      temp[0] = 0;
+      temp[1] = PI/2;
+      temp[2] = 0;
+      temp[3] = 0;
+      temp[4] = hrad;
+      temp[5] = 0;
+    }
+
+    unsigned int id = *next(uniqueIds.begin(), i);
+    temp.push_back(id);
+    estimates.push_back(temp);
+  }
+
+  return estimates;
+
+}
+
+vector<vector<double> > irlsStemCircle(vector<vector<double> >& cloud, vector<unsigned int>& segments, vector<double>& radii, unsigned int nPoints, double tolerance){
+
+  vector<vector<vector<double> > > stemSlices = getChunks(cloud, segments);
+
+  cloud.clear();
+  cloud.shrink_to_fit();
+
+  vector<double> segRadii = idSortUnique(segments, radii);
+
+  set<unsigned int> uniqueIds;
+  for(auto& i : segments){
+    uniqueIds.insert(i);
+  }
+
+  vector< vector<double> > estimates;
+
+  for(unsigned int i = 0; i < stemSlices.size(); ++i){
+    vector<vector<double> >& slice = stemSlices[i];
+
+    if(slice[0].size() <= 3) continue;
+
+    if(slice[0].size() > nPoints && nPoints > 0){
+      double p = (double)nPoints / (double)slice[0].size();
+      slice = randomPoints(slice, p);
+    }
+
+    double& hrad = segRadii[i];
+    vector<double> initPars = eigenCircle(slice);
+    vector<double> temp = irlsCircle(slice, initPars);
+
+    double rdiff = abs(temp[2] - hrad);
+    if(rdiff > tolerance){
+      temp[0] = 0;
+      temp[1] = 0;
+      temp[2] = hrad;
+      temp[3] = 0;
+    }
+
+    unsigned int id = *next(uniqueIds.begin(), i);
+    temp.push_back(id);
+    estimates.push_back(temp);
+  }
+
+  return estimates;
+
+}
+
+// plot-wise methods
 vector<vector<vector<double> > > ransacPlotCircles(vector<vector<double> >& cloud, vector<unsigned int>& treeId, vector<unsigned int>& segments, vector<double>& radii, unsigned int nSamples, double pConfidence, double pInliers, double tolerance){
 
   vector<vector<vector<double> > > trees = getChunks(cloud, treeId);
@@ -773,16 +603,345 @@ vector<vector<vector<double> > > ransacPlotCircles(vector<vector<double> >& clou
 
   vector< vector< vector<double> > > treeEstimates;
 
+  unsigned int progress_counter = 0;
+  unsigned int n_ids = uniqueTotalCounter(treeId);
   for(unsigned int i = 0; i < trees.size(); ++i){
 
     vector<unsigned int>& segs = indices[i];
 
     if(segs.empty()) continue;
+    progressPrinter("trees", progress_counter++, n_ids);
 
     vector< vector<double> >& tree = trees[i];
     vector<double>& segsRadii = treeRadii[i];
 
-    vector< vector<double> > temp = ransacStemCircles(tree, segs, segsRadii, nSamples, pConfidence, pInliers, tolerance);
+    vector< vector<double> > temp = ransacStemCircle(tree, segs, segsRadii, nSamples, pConfidence, pInliers, tolerance);
+
+    for(vector< vector<double> >::iterator t = temp.begin(); t != temp.end(); t++)
+      t->push_back(uniqId[i]);
+
+    treeEstimates.push_back(temp);
+  }
+
+  return treeEstimates;
+
+}
+
+vector<vector<vector<double> > > ransacPlotCylinders(vector<vector<double> >& cloud, vector<unsigned int>& treeId, vector<unsigned int>& segments, vector<double>& radii, unsigned int nSamples, double pConfidence, double pInliers, double tolerance){
+
+  vector<vector<vector<double> > > trees = getChunks(cloud, treeId);
+  cloud.clear();
+  cloud.shrink_to_fit();
+
+  vector<unsigned int> uniqId = idSortUnique(treeId, treeId);
+  vector<vector<unsigned int> > indices = partitionIndex(treeId, segments);
+  vector<vector<double> > treeRadii = partitionIndex(treeId, radii);
+
+  vector< vector< vector<double> > > treeEstimates;
+  
+  unsigned int progress_counter = 0;
+  unsigned int n_ids = uniqueTotalCounter(treeId);
+  for(unsigned int i = 0; i < trees.size(); ++i){
+
+    vector<unsigned int>& segs = indices[i];
+
+    if(segs.empty()) continue;
+    progressPrinter("trees", progress_counter++, n_ids);
+
+    vector< vector<double> >& tree = trees[i];
+    vector<double>& segsRadii = treeRadii[i];
+
+    vector< vector<double> > temp = ransacStemCylinder(tree, segs, segsRadii, nSamples, pConfidence, pInliers, tolerance);
+
+    for(vector< vector<double> >::iterator t = temp.begin(); t != temp.end(); t++)
+      t->push_back(uniqId[i]);
+
+    treeEstimates.push_back(temp);
+  }
+
+  return treeEstimates;
+
+}
+
+vector<vector<vector<double> > > irlsPlotCylinders(vector<vector<double> >& cloud, vector<unsigned int>& treeId, vector<unsigned int>& segments, vector<double>& radii, unsigned int nPoints, double tolerance){
+
+  vector<vector<vector<double> > > trees = getChunks(cloud, treeId);
+  cloud.clear();
+  cloud.shrink_to_fit();
+
+  vector<unsigned int> uniqId = idSortUnique(treeId, treeId);
+  vector<vector<unsigned int> > indices = partitionIndex(treeId, segments);
+  vector<vector<double> > treeRadii = partitionIndex(treeId, radii);
+
+  vector< vector< vector<double> > > treeEstimates;
+
+  unsigned int progress_counter = 0;
+  unsigned int n_ids = uniqueTotalCounter(treeId);
+  for(unsigned int i = 0; i < trees.size(); ++i){
+
+    vector<unsigned int>& segs = indices[i];
+
+    if(segs.empty()) continue;
+    progressPrinter("trees", progress_counter++, n_ids);
+
+    vector< vector<double> >& tree = trees[i];
+    vector<double>& segsRadii = treeRadii[i];
+
+    vector< vector<double> > temp = irlsStemCylinder(tree, segs, segsRadii, nPoints, tolerance);
+
+    for(vector< vector<double> >::iterator t = temp.begin(); t != temp.end(); t++)
+      t->push_back(uniqId[i]);
+
+    treeEstimates.push_back(temp);
+  }
+
+  return treeEstimates;
+
+}
+
+vector<vector<vector<double> > > irlsPlotCircles(vector<vector<double> >& cloud, vector<unsigned int>& treeId, vector<unsigned int>& segments, vector<double>& radii, unsigned int nPoints, double tolerance){
+
+  vector<vector<vector<double> > > trees = getChunks(cloud, treeId);
+  cloud.clear();
+  cloud.shrink_to_fit();
+
+  vector<unsigned int> uniqId = idSortUnique(treeId, treeId);
+  vector<vector<unsigned int> > indices = partitionIndex(treeId, segments);
+  vector<vector<double> > treeRadii = partitionIndex(treeId, radii);
+
+  vector< vector< vector<double> > > treeEstimates;
+
+  unsigned int progress_counter = 0;
+  unsigned int n_ids = uniqueTotalCounter(treeId);
+  for(unsigned int i = 0; i < trees.size(); ++i){
+
+    vector<unsigned int>& segs = indices[i];
+
+    if(segs.empty()) continue;
+    progressPrinter("trees", progress_counter++, n_ids);
+
+    vector< vector<double> >& tree = trees[i];
+    vector<double>& segsRadii = treeRadii[i];
+
+    vector< vector<double> > temp = irlsStemCircle(tree, segs, segsRadii, nPoints, tolerance);
+
+    for(vector< vector<double> >::iterator t = temp.begin(); t != temp.end(); t++)
+      t->push_back(uniqId[i]);
+
+    treeEstimates.push_back(temp);
+  }
+
+  return treeEstimates;
+
+}
+
+vector<vector<double> > pointMetrics(vector<vector<double> >& cloud, vector<vector<unsigned int> >& idx, vector<bool> which_metrics){
+
+  unsigned int ncol = idx.size();
+  unsigned int nrow = idx[0].size();
+
+  vector<vector<double> > out;
+  for(unsigned int i = 0; i < nrow; ++i){
+
+    vector<vector<double> > xyz(3);
+
+    for(unsigned int j = 0; j < ncol; ++j){
+
+      int cell = idx[j][i];
+      if(cell-- == 0) break;
+
+      xyz[0].push_back( cloud[0][cell] );
+      xyz[1].push_back( cloud[1][cell] );
+      xyz[2].push_back( cloud[2][cell] );
+    }
+
+    if(xyz[0].size() < 3){
+      out.push_back({0});
+    }else{
+      vector<double> metrics = nnMetrics(xyz, which_metrics);
+      out.push_back(metrics);
+    }
+  }
+
+  return out;
+}
+
+vector<vector<double> > voxelMetrics(vector<vector<double> >& cloud, vector<vector<unsigned int> >& idx, vector<bool> which_metrics){
+
+  unsigned int nvoxels = idx.size();
+  vector<vector<double> > out;
+
+  int i = 1;
+  for(auto& vx : idx){
+
+    if(vx.size() < 3){
+      out.push_back({0});
+      continue;
+    }
+
+    vector<vector<double> > xyz(3);
+
+    for(auto& pt : vx){
+      xyz[0].push_back( cloud[0][pt] );
+      xyz[1].push_back( cloud[1][pt] );
+      xyz[2].push_back( cloud[2][pt] );
+    }
+
+    vector<double> metrics = nnMetrics(xyz, which_metrics);
+    out.push_back(metrics);
+  }
+
+  return out;
+}
+
+vector<unsigned long long int> voxelIndex(vector<vector<double> >& cloud, double voxel_spacing){
+
+  typedef unsigned long long int llint;
+
+  double xoffset = *min_element(cloud[0].begin(), cloud[0].end());
+  double yoffset = *min_element(cloud[1].begin(), cloud[1].end());
+  double zoffset = *min_element(cloud[2].begin(), cloud[2].end());
+
+  VoxelGrid voxelRegistry(xoffset, yoffset, zoffset, voxel_spacing);
+  vector<llint> indexer(cloud[0].size());
+
+  for(unsigned int i = 0; i < indexer.size(); ++i){
+    indexer[i] = voxelRegistry.getVoxelHash(cloud[0][i], cloud[1][i], cloud[2][i]);
+  }
+
+  llint mindex = *min_element(indexer.begin(), indexer.end());
+  for(auto& i : indexer) i -= mindex;
+
+  return indexer;
+}
+
+vector<vector<vector<double> > > plotEigenHough(vector<vector<double> >& cppEigenCloud, vector<unsigned int>& pointId, vector<unsigned int>& treeId, vector<unsigned int>& segId, double voxel_size, double max_rad, bool is2d, bool getSpace){
+
+  IndexedCloudParts plotCloud(cppEigenCloud, pointId, treeId, segId);
+  cppEigenCloud.clear();
+  cppEigenCloud.shrink_to_fit();
+  
+  vector<vector<vector<double> > > plotResults;
+
+  for(auto& tree : plotCloud.parts){
+
+    unsigned int id = tree.first;
+
+    vector<vector<vector<double> > > calcTree = treeEigenHough(tree.second.cloud, tree.second.uniqueIds, tree.second.indexer, voxel_size, max_rad, is2d, getSpace);
+
+    for(auto& temp : calcTree){
+      temp.push_back({ (double)id });
+    }
+
+    plotResults.insert(plotResults.end(), calcTree.begin(), calcTree.end());
+  }
+
+  return plotResults;
+}
+
+vector<unsigned int> treeIdsFromMap(vector<vector<double> >& xy, vector<vector<double> >& xymap, vector<unsigned int> ids, double length, bool circle){
+
+  vector<unsigned int> treeIds( xy[0].size() );
+
+  for(unsigned int i = 0; i < xy[0].size(); ++i){
+    double x = xy[0][i];
+    double y = xy[1][i];
+
+    for(unsigned int j = 0; j < ids.size(); ++j){
+      double xref = xymap[0][j];
+      double yref = xymap[1][j];
+
+      bool isInside = false;
+      if(circle){
+        double dist = sqrt( pow(x - xref, 2) + pow(y - yref, 2) );
+        isInside = dist < length;
+      }else{
+        double xdist = abs(x - xref);
+        double ydist = abs(y - yref);
+        isInside = xdist < (length/2) && ydist < (length/2);
+      }
+
+      if(isInside){
+        treeIds[i] = ids[j];
+        break;
+      }
+    }
+  }
+
+  return treeIds;
+}
+
+vector<vector<double> > bfStemCylinder(vector<vector<double> >& cloud, vector<unsigned int>& segments, vector<double>& radii, unsigned int nSamples, double pConfidence, double pInliers, double max_angle, double tolerance){
+
+  vector<vector<vector<double> > > stemSlices = getChunks(cloud, segments);
+
+  cloud.clear();
+  cloud.shrink_to_fit();
+
+  vector<double> segRadii = idSortUnique(segments, radii);
+
+  set<unsigned int> uniqueIds;
+  for(auto& i : segments){
+    uniqueIds.insert(i);
+  }
+
+  vector< vector<double> > estimates;
+
+  for(unsigned int i = 0; i < stemSlices.size(); ++i){
+
+    vector<vector<double> > slice = stemSlices[i];
+
+    // cout << "... seg " << i+1 << " of " << stemSlices.size() << ", n points: " << slice[0].size() << endl;
+
+    if(slice[0].size() <= nSamples) continue;
+
+    double& hrad = segRadii[i];
+    vector<double> temp = bruteForceRansacCylinder(slice, nSamples, pConfidence, pInliers, 20, max_angle, true)[0];
+
+    double rdiff = abs(temp[2] - hrad);
+    if(rdiff > tolerance){
+      temp[0] = 0;
+      temp[1] = 0;
+      temp[2] = hrad;
+      temp[3] = 0;
+      temp[4] = 0;
+      temp[5] = 0;
+    }
+
+    unsigned int id = *next(uniqueIds.begin(), i);
+    temp.push_back(id);
+    estimates.push_back(temp);
+  }
+
+  return estimates;
+
+}
+
+vector<vector<vector<double> > > bfPlotCylinders(vector<vector<double> >& cloud, vector<unsigned int>& treeId, vector<unsigned int>& segments, vector<double>& radii, unsigned int nSamples, double pConfidence, double pInliers, double max_angle, double tolerance){
+
+  vector<vector<vector<double> > > trees = getChunks(cloud, treeId);
+  cloud.clear();
+  cloud.shrink_to_fit();
+
+  vector<unsigned int> uniqId = idSortUnique(treeId, treeId);
+  vector<vector<unsigned int> > indices = partitionIndex(treeId, segments);
+  vector<vector<double> > treeRadii = partitionIndex(treeId, radii);
+
+  vector< vector< vector<double> > > treeEstimates;
+
+  unsigned int progress_counter = 0;
+  unsigned int n_ids = uniqueTotalCounter(treeId);
+  for(unsigned int i = 0; i < trees.size(); ++i){
+
+    vector<unsigned int>& segs = indices[i];
+
+    if(segs.empty()) continue;
+    progressPrinter("trees", progress_counter++, n_ids);
+
+    vector< vector<double> >& tree = trees[i];
+    vector<double>& segsRadii = treeRadii[i];
+
+    vector< vector<double> > temp = bfStemCylinder(tree, segs, segsRadii, nSamples, pConfidence, pInliers, max_angle, tolerance);
 
     for(vector< vector<double> >::iterator t = temp.begin(); t != temp.end(); t++)
       t->push_back(uniqId[i]);

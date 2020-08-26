@@ -4,29 +4,35 @@
 \alias{stemPoints}
 \title{Stem points classification}
 \usage{
-stemPoints(las, map = NULL, method = stem.hough())
+stemPoints(las, method = stm.hough())
 }
 \arguments{
-\item{las}{\code{LAS} object.}
+\item{las}{\code{\link[lidR:LAS]{LAS}} object.}
 
-\item{map}{optional - map of tree positions (output from \code{\link{treeMap}} or \code{\link{treePositions}}). If omitted, the algorithm assumes \code{las} is a single tree.}
-
-\item{method}{stem denoising algorithm - currently available: \code{\link{stem.hough}}.}
+\item{method}{stem denoising algorithm. Currently available: \code{\link{stm.hough}}, \code{\link{stm.eigen.knn}} and \code{\link{stm.eigen.voxel}}.}
 }
 \value{
-\code{LAS} object with \emph{stem_points} signature.
+\code{\link[lidR:LAS]{LAS}} object.
 }
 \description{
-Classify stem points on a \strong{normalized} point cloud.
+Classify stem points of all trees in a \strong{normalized} point cloud. Stem denoising methods are prefixed by \code{stm}.
 }
 \examples{
 ### single tree
-file = system.file("extdata", "pine.laz", package="TreeLS")
-tls = readTLS(file)
-tls = stemPoints(tls)
+file = system.file("extdata", "spruce.laz", package="TreeLS")
+tls = readTLS(file) \%>\%
+  tlsNormalize \%>\%
+  stemPoints(stm.hough(h_base = c(.5,2)))
 plot(tls, color='Stem')
 
-### forest plot - check the example given for the stem segmentation function
-?stemSegmentation
+### entire forest plot
+file = system.file("extdata", "pine_plot.laz", package="TreeLS")
+tls = readTLS(file) \%>\%
+  tlsNormalize \%>\%
+  tlsSample
 
+map = treeMap(tls, map.hough())
+tls = treePoints(tls, map, trp.crop(circle=FALSE))
+tls = stemPoints(tls, stm.hough(pixel_size = 0.03))
+tlsPlot(tls)
 }

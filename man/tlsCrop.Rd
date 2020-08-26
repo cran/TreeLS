@@ -7,30 +7,29 @@
 tlsCrop(las, x, y, len, circle = TRUE, negative = FALSE)
 }
 \arguments{
-\item{las}{\code{LAS} object.}
+\item{las}{\code{\link[lidR:LAS]{LAS}} object.}
 
-\item{x, y}{\code{numeric} -  X and Y center coordinates of the area to be cropped.}
+\item{x, y}{\code{numeric} -  X and Y center coordinates of the crop region.}
 
 \item{len}{\code{numeric} -  if \code{circle = TRUE}, \code{len} is the circle's radius, otherwise it is the side length of a square.}
 
-\item{circle}{\code{logical} -  if \code{TRUE} (default), crops a circle, otherwise a square.}
+\item{circle}{\code{logical} -  crops a circle (if \code{TRUE}) or a square.}
 
-\item{negative}{\code{logical} - if \code{TRUE}, returns all points outside the specified circle/square boundaries, otherwise returns all points inside the circle/square (default).}
+\item{negative}{\code{logical} - if \code{TRUE}, returns all points **outside** the specified circle/square perimeter.}
 }
 \value{
-\code{LAS} object.
+\code{\link[lidR:LAS]{LAS}} object.
 }
 \description{
 Returns a cropped point cloud of all points inside or outside specified boundaries of circle or square shapes.
 }
 \examples{
-file = system.file("extdata", "model_boles.laz", package="TreeLS")
+file = system.file("extdata", "pine_plot.laz", package="TreeLS")
 tls = readTLS(file)
-plot(tls)
 
 tls = tlsCrop(tls, 2, 3, 1.5, TRUE, TRUE)
 plot(tls)
 
-tls = tlsCrop(tls, 15, 10, 3, FALSE, FALSE)
+tls = tlsCrop(tls, 5, 5, 5, FALSE, FALSE)
 plot(tls)
 }
